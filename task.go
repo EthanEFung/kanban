@@ -1,9 +1,9 @@
 package main
 
 type Task struct {
-	status      status
-	title       string
-	description string
+	Status      status
+	Name       string
+	Desc string
 	createdAt   string
 	updatedAt   string
 	filterBy    filterBy
@@ -11,40 +11,40 @@ type Task struct {
 
 func NewTask(status status, title, description string) Task {
 	return Task{
-		status:      status,
-		title:       title,
-		description: description,
+		Status:      status,
+		Name:       title,
+		Desc: description,
 	}
 }
 
 func (t Task) FilterValue() string {
 	switch t.filterBy {
 	case title:
-		return t.title
+		return t.Name
 	case description:
-		return t.description
+		return t.Desc
 	}
-	return t.title
+	return t.Name
 }
 
 func (t Task) Title() string {
-	return t.title
+	return t.Name
 }
 
 func (t Task) Description() string {
-	return t.description
+	return t.Desc
 }
 
 func (t *Task) Next() {
-	if t.status == done {
+	if t.Status == done {
 		return
 	}
-	t.status++
+	t.Status++
 }
 
 func (t *Task) Prev() {
-	if t.status == todo {
+	if t.Status == todo {
 		return
 	}
-	t.status--
+	t.Status--
 }

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"encoding/csv"
+	"encoding/gob"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -48,47 +49,26 @@ var (
 	focusedStyle = columnStyle.Copy().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62"))
 )
 
+const filepath = ".kanban/tasks.bin"
+
 func mapTasks(path string) []Task {
 	f, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
-	r := csv.NewReader(f)
-	records, err := r.ReadAll()
+	gobble := Gobble{}
+	tasks, err := gobble.readTasks(f) 
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	tasks := []Task{}
-	for _, record := range records {
-		var status status;
-		switch(record[2]) {
-		case "todo":
-			status = todo;
-		case "doing":
-			status = doing;
-		case "done":
-			status = done;
-		default:
-			log.Fatalf("Unknown status of %s was declared, but unsupported", record[2])
-		}
-		tasks = append(tasks, NewTask(status, record[0], record[1]))
+		log.Fatalf("Could not read tasks %v", err)
 	}
 	return tasks
 }
 
 func initialTasks() []Task {
-	_, err := os.Stat(".kanban/")
-
+	_, err := os.Stat(filepath)
 	if err != nil {
-
-		err = os.MkdirAll(".kanban/", os.ModePerm)
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		// create files
-		f, err := os.Create(".kanban/items.csv")
+		f, err := os.Create(filepath)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -96,8 +76,38 @@ func initialTasks() []Task {
 
 		return []Task{}
 	}
+	return mapTasks(filepath);
+}
 
-	return mapTasks(".kanban/items.csv");
+type Gobble struct {
+	path string
+}
+
+func (g Gobble) saveTasks(wr io.Writer, tasks []Task) error {
+	enc := gob.NewEncoder(wr)
+	for _, task := range tasks {
+		if err := enc.Encode(task); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g Gobble) readTasks(r io.Reader) ([]Task, error) {
+	dec := gob.NewDecoder(r)
+	tasks := []Task{}
+	var curr Task
+	var err error
+	for {
+		 if err = dec.Decode(&curr); err != nil {
+			break
+		}
+		tasks = append(tasks, curr)
+	}
+	if err != io.EOF && err != io.ErrUnexpectedEOF {
+		return tasks, err
+	}
+	return tasks, nil
 }
 
 func main() {

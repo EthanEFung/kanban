@@ -1,6 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"log"
+	"os"
+
+	
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -61,10 +66,12 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			title, desc := m.Edit()
 			models[form] = NewForm(m.focused, title, desc)
 			return models[form].Update(nil)
+		case "q","ctrl+c": 
+			return m, m.GracefulShutdown
 		}
 	case Task:
 		task := msg
-		return m, m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), task)
+		return m, m.lists[task.Status].InsertItem(len(m.lists[task.Status].Items()), task)
 	case status:
 		m.focused = msg
 	}
@@ -116,7 +123,7 @@ func (m boardModel) Next() status {
 func (m *boardModel) Delete() tea.Msg {
 	if len(m.lists[m.focused].VisibleItems()) > 0 {
 		selected := m.lists[m.focused].SelectedItem().(Task)
-		m.lists[selected.status].RemoveItem(m.lists[m.focused].Index())
+		m.lists[selected.Status].RemoveItem(m.lists[m.focused].Index())
 		m.deleted.InsertItem(len(m.deleted.Items())-1, list.Item(selected))
 	}
 	return nil
@@ -132,15 +139,15 @@ func (m *boardModel) NextList() tea.Msg {
 		return nil
 	}
 	task := selected.(Task)
-	prev := task.status
-	m.lists[task.status].RemoveItem(m.lists[m.focused].Index())
+	prev := task.Status
+	m.lists[task.Status].RemoveItem(m.lists[m.focused].Index())
 	task.Next()
-	if prev != task.status {
+	if prev != task.Status {
 		m.lists[prev].Select(-1)
 	}
-	m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), list.Item(task))
-	m.lists[task.status].Select(len(m.lists[task.status].Items()))
-	return task.status
+	m.lists[task.Status].InsertItem(len(m.lists[task.Status].Items()), list.Item(task))
+	m.lists[task.Status].Select(len(m.lists[task.Status].Items()))
+	return task.Status
 }
 
 func (m *boardModel) PrevList() tea.Msg {
@@ -149,15 +156,15 @@ func (m *boardModel) PrevList() tea.Msg {
 		return nil
 	}
 	task := selected.(Task)
-	prev := task.status
-	if prev != task.status {
+	prev := task.Status
+	if prev != task.Status {
 		m.lists[prev].Select(-1)
 	}
-	m.lists[task.status].RemoveItem(m.lists[m.focused].Index())
+	m.lists[task.Status].RemoveItem(m.lists[m.focused].Index())
 	task.Prev()
-	m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), list.Item(task))
-	m.lists[task.status].Select(len(m.lists[task.status].Items()))
-	return task.status
+	m.lists[task.Status].InsertItem(len(m.lists[task.Status].Items()), list.Item(task))
+	m.lists[task.Status].Select(len(m.lists[task.Status].Items()))
+	return task.Status
 }
 
 func (m *boardModel) MoveDown() tea.Msg {
@@ -171,10 +178,10 @@ func (m *boardModel) MoveDown() tea.Msg {
 		return nil
 	}
 	index += 2
-	m.lists[task.status].InsertItem(index, list.Item(task))
-	m.lists[task.status].Select(index - 1)
-	m.lists[task.status].RemoveItem(index - 2)
-	return task.status
+	m.lists[task.Status].InsertItem(index, list.Item(task))
+	m.lists[task.Status].Select(index - 1)
+	m.lists[task.Status].RemoveItem(index - 2)
+	return task.Status
 }
 
 func (m *boardModel) MoveUp() tea.Msg {
@@ -187,10 +194,10 @@ func (m *boardModel) MoveUp() tea.Msg {
 	if index == 0 {
 		return nil
 	}
-	m.lists[task.status].InsertItem(index-1, list.Item(task))
-	m.lists[task.status].Select(index - 1)
-	m.lists[task.status].RemoveItem(index + 1)
-	return task.status
+	m.lists[task.Status].InsertItem(index-1, list.Item(task))
+	m.lists[task.Status].Select(index - 1)
+	m.lists[task.Status].RemoveItem(index + 1)
+	return task.Status
 }
 
 func (m *boardModel) Edit() (string, string) {
@@ -199,8 +206,21 @@ func (m *boardModel) Edit() (string, string) {
 		return "", ""
 	}
 	task := selected.(Task)
-	m.lists[task.status].RemoveItem(m.lists[task.status].Index())
+	m.lists[task.Status].RemoveItem(m.lists[task.Status].Index())
 	return task.Title(), task.Description() 
+}
+
+func (m *boardModel) GracefulShutdown() tea.Msg {
+	gobbler := Gobble{}
+	f, err := os.Create(filepath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := gobbler.saveTasks(f, m.deriveTasks()); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("quitting...")
+	return tea.Quit()
 }
 
 func (m boardModel) newLists(width, height int) []list.Model {
@@ -217,7 +237,7 @@ func (m boardModel) newLists(width, height int) []list.Model {
 func (m boardModel) filterTasks(status status) []list.Item {
 	result := []list.Item{}
 	for _, task := range m.tasks {
-		if task.status != status {
+		if task.Status != status {
 			continue
 		}
 		result = append(result, task)
@@ -228,3 +248,16 @@ func (m boardModel) filterTasks(status status) []list.Item {
 func (m boardModel) newDeleted() list.Model {
 	return list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 }
+
+func (m boardModel) deriveTasks() []Task {
+	tasks := []Task{}
+	for _, list := range m.lists {
+		for _, item := range list.Items() {
+			if task, ok := item.(Task); ok {
+				tasks = append(tasks, task)
+			}
+		}
+	}
+	return tasks
+}
+
