@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,8 +13,9 @@ import (
 type boardModel struct {
 	focused status
 	lists   []list.Model
-	deleted list.Model
+	deleted []Task
 	tasks   []Task
+	last    Task
 }
 
 func NewBoard(tasks []Task) *boardModel {
@@ -50,8 +50,20 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			models[form] = NewForm(m.focused, "", "")
 			return models[form].Update(nil)
 		case "x":
+			// first update the board model
+			selected := m.lists[m.focused].SelectedItem().(Task)
+			m.deleted = append(m.deleted, selected)
+			//then update the list model
 			return m, m.Delete
 		case "u":
+			l := len(m.deleted)
+			if l == 0 {
+				return m, nil
+			}
+			m.last = m.deleted[l-1]
+			m.deleted = m.deleted[:l-1]
+			m.lists[m.focused].Select(-1)
+			m.focused = m.last.Status
 			return m, m.Undo
 		case "L":
 			return m, m.NextList
@@ -66,7 +78,7 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			title, desc := m.Edit()
 			models[form] = NewForm(m.focused, title, desc)
 			return models[form].Update(nil)
-		case "q","ctrl+c": 
+		case "q", "ctrl+c":
 			return m, m.GracefulShutdown
 		}
 	case Task:
@@ -124,13 +136,14 @@ func (m *boardModel) Delete() tea.Msg {
 	if len(m.lists[m.focused].VisibleItems()) > 0 {
 		selected := m.lists[m.focused].SelectedItem().(Task)
 		m.lists[selected.Status].RemoveItem(m.lists[m.focused].Index())
-		m.deleted.InsertItem(len(m.deleted.Items())-1, list.Item(selected))
 	}
 	return nil
 }
 
 func (m *boardModel) Undo() tea.Msg { // we'll work on this
-	return nil
+	l := len(m.lists[m.focused].Items())
+	m.lists[m.focused].Select(l)
+	return m.last
 }
 
 func (m *boardModel) NextList() tea.Msg {
@@ -207,19 +220,27 @@ func (m *boardModel) Edit() (string, string) {
 	}
 	task := selected.(Task)
 	m.lists[task.Status].RemoveItem(m.lists[task.Status].Index())
-	return task.Title(), task.Description() 
+	return task.Title(), task.Description()
 }
 
-func (m *boardModel) GracefulShutdown() tea.Msg {
+func (m *boardModel) Save() error {
 	gobbler := Gobble{}
 	f, err := os.Create(filepath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	if err := gobbler.saveTasks(f, m.deriveTasks()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *boardModel) GracefulShutdown() tea.Msg {
+	fmt.Println("quitting...")
+	err := m.Save()
+	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("quitting...")
 	return tea.Quit()
 }
 
@@ -230,7 +251,9 @@ func (m boardModel) newLists(width, height int) []list.Model {
 	for _, status := range statuses {
 		lists[status].Title = titleCaser.String(status.String())
 		lists[status].SetItems(m.filterTasks(status))
+		lists[status].Select(-1)
 	}
+	lists[todo].Select(0)
 	return lists
 }
 
@@ -245,8 +268,8 @@ func (m boardModel) filterTasks(status status) []list.Item {
 	return result
 }
 
-func (m boardModel) newDeleted() list.Model {
-	return list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+func (m boardModel) newDeleted() []Task {
+	return []Task{}
 }
 
 func (m boardModel) deriveTasks() []Task {
@@ -260,4 +283,3 @@ func (m boardModel) deriveTasks() []Task {
 	}
 	return tasks
 }
-

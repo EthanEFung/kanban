@@ -1,19 +1,19 @@
 package main
 
 type Task struct {
-	Status      status
-	Name       string
-	Desc string
-	createdAt   string
-	updatedAt   string
-	filterBy    filterBy
+	Status    status
+	Name      string
+	Desc      string
+	createdAt string
+	updatedAt string
+	filterBy  filterBy
 }
 
 func NewTask(status status, title, description string) Task {
 	return Task{
-		Status:      status,
-		Name:       title,
-		Desc: description,
+		Status: status,
+		Name:   title,
+		Desc:   description,
 	}
 }
 

@@ -57,7 +57,7 @@ func mapTasks(path string) []Task {
 		log.Fatal(err)
 	}
 	gobble := Gobble{}
-	tasks, err := gobble.readTasks(f) 
+	tasks, err := gobble.readTasks(f)
 	if err != nil {
 		log.Fatalf("Could not read tasks %v", err)
 	}
@@ -76,7 +76,7 @@ func initialTasks() []Task {
 
 		return []Task{}
 	}
-	return mapTasks(filepath);
+	return mapTasks(filepath)
 }
 
 type Gobble struct {
@@ -96,10 +96,10 @@ func (g Gobble) saveTasks(wr io.Writer, tasks []Task) error {
 func (g Gobble) readTasks(r io.Reader) ([]Task, error) {
 	dec := gob.NewDecoder(r)
 	tasks := []Task{}
-	var curr Task
 	var err error
 	for {
-		 if err = dec.Decode(&curr); err != nil {
+		var curr Task
+		if err = dec.Decode(&curr); err != nil {
 			break
 		}
 		tasks = append(tasks, curr)

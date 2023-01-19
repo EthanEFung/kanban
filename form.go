@@ -37,7 +37,7 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			// TODO: instead of sending a quit message, instead lets redirect the user
-		    // back to the board.
+			// back to the board.
 			return m, tea.Quit
 		case "enter", "tab":
 			if m.title.Focused() {
