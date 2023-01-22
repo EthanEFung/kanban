@@ -4,11 +4,20 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+type TickMsg time.Time
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Second*5, func(t time.Time) tea.Msg {
+		return TickMsg(t)
+	})
+}
 
 type boardModel struct {
 	focused status
@@ -25,7 +34,7 @@ func NewBoard(tasks []Task) *boardModel {
 }
 
 func (m boardModel) Init() tea.Cmd {
-	return nil
+	return tick()
 }
 
 func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -50,8 +59,12 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			models[form] = NewForm(m.focused, "", "")
 			return models[form].Update(nil)
 		case "x":
+		    item := m.lists[m.focused].SelectedItem()
+			if item == nil  {
+				return m, nil
+			}
 			// first update the board model
-			selected := m.lists[m.focused].SelectedItem().(Task)
+			selected := item.(Task)
 			m.deleted = append(m.deleted, selected)
 			//then update the list model
 			return m, m.Delete
@@ -86,6 +99,10 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.lists[task.Status].InsertItem(len(m.lists[task.Status].Items()), task)
 	case status:
 		m.focused = msg
+	case TickMsg:
+		// autosave
+		m.Save()
+		return m, tick()
 	}
 	var cmd tea.Cmd
 	m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
