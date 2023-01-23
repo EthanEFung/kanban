@@ -59,8 +59,8 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			models[form] = NewForm(m.focused, "", "")
 			return models[form].Update(nil)
 		case "x":
-		    item := m.lists[m.focused].SelectedItem()
-			if item == nil  {
+			item := m.lists[m.focused].SelectedItem()
+			if item == nil {
 				return m, nil
 			}
 			// first update the board model
@@ -96,6 +96,7 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case Task:
 		task := msg
+		m.lists[task.Status].Select(len(m.lists[task.Status].Items()))
 		return m, m.lists[task.Status].InsertItem(len(m.lists[task.Status].Items()), task)
 	case status:
 		m.focused = msg
