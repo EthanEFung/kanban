@@ -14,12 +14,20 @@ type formModel struct {
 }
 
 func NewForm(focused status, title, description string) *formModel {
+	titleInput := textinput.New()
+	titleInput.Placeholder = "Task Name"
+	titleInput.CharLimit = 32
+
+	descriptionArea := textarea.New()
+	descriptionArea.Placeholder = "Task Description"
+	descriptionArea.CharLimit = 32
 
 	form := &formModel{
 		focused:     focused,
-		title:       textinput.New(),
-		description: textarea.New(),
+		title:       titleInput,
+		description: descriptionArea,
 	}
+
 	form.title.SetValue(title)
 	form.description.SetValue(description)
 	form.title.Focus()
@@ -67,7 +75,8 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m formModel) View() string {
-	return lipgloss.JoinVertical(lipgloss.Left, m.title.View(), m.description.View())
+
+	return focusedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, m.title.View(), formDescStyle.Render(m.description.View())))
 }
 
 func (m formModel) CreateTask() tea.Msg {

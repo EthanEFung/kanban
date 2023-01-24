@@ -45,8 +45,9 @@ const divisor int = 4
 var titleCaser = cases.Title(language.English)
 
 var (
-	columnStyle  = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.HiddenBorder())
-	focusedStyle = columnStyle.Copy().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62"))
+	columnStyle   = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.HiddenBorder())
+	focusedStyle  = columnStyle.Copy().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62"))
+	formDescStyle = lipgloss.NewStyle().MarginTop(1)
 )
 
 const filepath = ".kanban/tasks.bin"
