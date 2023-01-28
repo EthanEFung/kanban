@@ -1,15 +1,104 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+type boardKeymap struct {
+	FocusLeft   key.Binding
+	FocusRight  key.Binding
+	FocusDown   key.Binding
+	FocusUp     key.Binding
+	NewTask     key.Binding
+	EditTask    key.Binding
+	RemoveTask  key.Binding
+	UndoRemove  key.Binding
+	MoveLeft    key.Binding
+	MoveRight   key.Binding
+	MoveDown    key.Binding
+	MoveUp      key.Binding
+	SaveAndQuit key.Binding
+}
+
+var boardKeys = boardKeymap{
+	FocusUp: key.NewBinding(
+		key.WithKeys("k"),
+		key.WithHelp("k", "focus up"),
+	),
+	FocusRight: key.NewBinding(
+		key.WithKeys("l"),
+		key.WithHelp("l", "focus right"),
+	),
+	FocusDown: key.NewBinding(
+		key.WithKeys("j"),
+		key.WithHelp("j", "focus down"),
+	),
+	FocusLeft: key.NewBinding(
+		key.WithKeys("h"),
+		key.WithHelp("h", "focus left"),
+	),
+	MoveUp: key.NewBinding(
+		key.WithKeys("K"),
+		key.WithHelp("K", "move up"),
+	),
+	MoveRight: key.NewBinding(
+		key.WithKeys("L"),
+		key.WithHelp("L", "move right"),
+	),
+	MoveDown: key.NewBinding(
+		key.WithKeys("J"),
+		key.WithHelp("J", "move down"),
+	),
+	MoveLeft: key.NewBinding(
+		key.WithKeys("H"),
+		key.WithHelp("H", "move left"),
+	),
+	NewTask: key.NewBinding(
+		key.WithKeys("o"),
+		key.WithHelp("o", "new task"),
+	),
+	EditTask: key.NewBinding(
+		key.WithKeys("i"),
+		key.WithHelp("i", "edit task"),
+	),
+	RemoveTask: key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "remove task"),
+	),
+	UndoRemove: key.NewBinding(
+		key.WithKeys("u"),
+		key.WithHelp("u", "undo remove"),
+	),
+	SaveAndQuit: key.NewBinding(
+		key.WithKeys("q", "ctrl+c"),
+		key.WithHelp("q/ctrl+c", "save and quit"),
+	),
+}
+
+func (k boardKeymap) ShortHelp() []key.Binding {
+	return []key.Binding{
+		k.FocusUp, k.FocusRight, k.FocusDown, k.FocusLeft,
+		k.MoveUp, k.MoveRight, k.MoveDown, k.MoveLeft,
+		k.NewTask, k.EditTask, k.RemoveTask, k.UndoRemove,
+		k.SaveAndQuit}
+}
+
+func (k boardKeymap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.FocusUp, k.FocusRight, k.FocusDown, k.FocusLeft},
+		{k.MoveUp, k.MoveRight, k.MoveDown, k.MoveLeft},
+		{k.NewTask, k.EditTask, k.RemoveTask, k.UndoRemove},
+		{k.SaveAndQuit},
+	}
+}
 
 type TickMsg time.Time
 
@@ -20,15 +109,20 @@ func tick() tea.Cmd {
 }
 
 type boardModel struct {
-	focused status
-	lists   []list.Model
-	deleted []Task
-	tasks   []Task
-	last    Task
+	keys     boardKeymap
+	help     help.Model
+	quitting bool
+	focused  status
+	lists    []list.Model
+	deleted  []Task
+	tasks    []Task
+	last     Task
 }
 
 func NewBoard(tasks []Task) *boardModel {
 	return &boardModel{
+		keys:  boardKeys,
+		help:  help.New(),
 		tasks: tasks,
 	}
 }
@@ -42,33 +136,53 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		columnStyle.Width(msg.Width / divisor)
 		focusedStyle.Width(msg.Width / divisor)
-		columnStyle.Height(msg.Height - divisor)
-		focusedStyle.Height(msg.Height - divisor)
+		columnStyle.Height(msg.Height - 12)
+		focusedStyle.Height(msg.Height - 12)
+		helpStyle.Width(msg.Width)
+		m.lists = m.newLists(msg.Width, msg.Height-12)
 		if len(m.lists) == 0 {
-			m.lists = m.newLists(msg.Width, msg.Height)
 			m.deleted = m.newDeleted()
 		}
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "h":
+		switch {
+		// focuses
+		case key.Matches(msg, m.keys.FocusLeft):
 			m.focused = m.Prev()
-		case "l":
+		case key.Matches(msg, m.keys.FocusRight):
 			m.focused = m.Next()
-		case "o": // create new
+
+		// just utilizing the the native list keys for focusing down and up
+		// a list
+
+		// task movements
+		case key.Matches(msg, m.keys.MoveUp):
+			return m, m.MoveUp
+		case key.Matches(msg, m.keys.MoveRight):
+			return m, m.NextList
+		case key.Matches(msg, m.keys.MoveDown):
+			return m, m.MoveDown
+		case key.Matches(msg, m.keys.MoveLeft):
+			return m, m.PrevList
+
+		// task crud
+		case key.Matches(msg, m.keys.NewTask):
 			models[board] = m // save the state of the board
 			models[form] = NewForm(m.focused, "", "")
 			return models[form].Update(nil)
-		case "x":
+		case key.Matches(msg, m.keys.EditTask):
+			models[board] = m
+			title, desc := m.Edit()
+			models[form] = NewForm(m.focused, title, desc)
+			return models[form].Update(nil)
+		case key.Matches(msg, m.keys.RemoveTask):
 			item := m.lists[m.focused].SelectedItem()
 			if item == nil {
 				return m, nil
 			}
-			// first update the board model
-			selected := item.(Task)
-			m.deleted = append(m.deleted, selected)
-			//then update the list model
+			selected := item.(Task)                 // first update the board model
+			m.deleted = append(m.deleted, selected) // then update the list model
 			return m, m.Delete
-		case "u":
+		case key.Matches(msg, m.keys.UndoRemove):
 			l := len(m.deleted)
 			if l == 0 {
 				return m, nil
@@ -78,20 +192,10 @@ func (m boardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lists[m.focused].Select(-1)
 			m.focused = m.last.Status
 			return m, m.Undo
-		case "L":
-			return m, m.NextList
-		case "H":
-			return m, m.PrevList
-		case "J":
-			return m, m.MoveDown
-		case "K":
-			return m, m.MoveUp
-		case "i":
-			models[board] = m
-			title, desc := m.Edit()
-			models[form] = NewForm(m.focused, title, desc)
-			return models[form].Update(nil)
-		case "q", "ctrl+c":
+
+		// misc
+		case key.Matches(msg, m.keys.SaveAndQuit):
+			m.quitting = true
 			return m, m.GracefulShutdown
 		}
 	case Task:
@@ -114,6 +218,9 @@ func (m boardModel) View() string {
 	if len(m.lists) == 0 {
 		return "loading..."
 	}
+	if m.quitting {
+		return ""
+	}
 	views := []string{}
 	for _, status := range statuses {
 		if status == m.focused {
@@ -122,8 +229,10 @@ func (m boardModel) View() string {
 		}
 		views = append(views, columnStyle.Render(m.lists[status].View()))
 	}
+	boardViews := lipgloss.JoinHorizontal(lipgloss.Left, views...)
+	helpView := helpStyle.Render(m.help.View(m.keys))
 
-	return lipgloss.JoinHorizontal(lipgloss.Left, views...)
+	return lipgloss.JoinVertical(lipgloss.Left, boardViews, helpView)
 }
 
 func (m boardModel) Prev() status {
@@ -254,7 +363,6 @@ func (m *boardModel) Save() error {
 }
 
 func (m *boardModel) GracefulShutdown() tea.Msg {
-	fmt.Println("quitting...")
 	err := m.Save()
 	if err != nil {
 		log.Fatal(err)
@@ -263,7 +371,7 @@ func (m *boardModel) GracefulShutdown() tea.Msg {
 }
 
 func (m boardModel) newLists(width, height int) []list.Model {
-	l := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height/2)
+	l := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height)
 	l.SetShowHelp(false)
 	lists := []list.Model{l, l, l}
 	for _, status := range statuses {

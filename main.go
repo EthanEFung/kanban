@@ -48,6 +48,7 @@ var (
 	columnStyle   = lipgloss.NewStyle().Padding(1, 2).Border(lipgloss.HiddenBorder())
 	focusedStyle  = columnStyle.Copy().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62"))
 	formDescStyle = lipgloss.NewStyle().MarginTop(1)
+	helpStyle     = lipgloss.NewStyle().Padding(1, 2)
 )
 
 const filepath = ".kanban/tasks.bin"
