@@ -1,13 +1,46 @@
 package main
 
 import (
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+type formKeys struct {
+	Next key.Binding
+	Prev key.Binding
+	Esc  key.Binding
+}
+
+var formKeyMap = formKeys{
+	Next: key.NewBinding(
+		key.WithKeys("enter", "tab"),
+		key.WithHelp("enter/tab", "next"),
+	),
+	Prev: key.NewBinding(
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "prev"),
+	),
+	Esc: key.NewBinding(
+		key.WithKeys("ctrl+c"),
+		key.WithHelp("ctrl+c", "escape"),
+	),
+}
+
+func (k formKeys) ShortHelp() []key.Binding {
+	return []key.Binding{k.Next, k.Prev, k.Esc}
+}
+
+func (k formKeys) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Next, k.Prev, k.Esc}}
+}
+
 type formModel struct {
+	keys        formKeys
+	help        help.Model
 	focused     status
 	title       textinput.Model
 	description textarea.Model
@@ -23,6 +56,8 @@ func NewForm(focused status, title, description string) *formModel {
 	descriptionArea.CharLimit = 32
 
 	form := &formModel{
+		keys:        formKeyMap,
+		help:        help.New(),
 		focused:     focused,
 		title:       titleInput,
 		description: descriptionArea,
@@ -75,8 +110,9 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m formModel) View() string {
-
-	return focusedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, m.title.View(), formDescStyle.Render(m.description.View())))
+	formView := focusedStyle.Render(lipgloss.JoinVertical(lipgloss.Left, m.title.View(), formDescStyle.Render(m.description.View())))
+	helpView := helpStyle.Render(m.help.View(m.keys))
+	return lipgloss.JoinVertical(lipgloss.Left, formView, helpView)
 }
 
 func (m formModel) CreateTask() tea.Msg {
